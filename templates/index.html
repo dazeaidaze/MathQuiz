@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"> <!-- 设置字符编码 -->
+    <title>Math Quiz</title> <!-- 页面标题 -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> <!-- 引入jQuery库 -->
+</head>
+<body>
+<button id="getQuestions">Get Questions</button> <!-- 获取题目按钮 -->
+<div id="questions"></div> <!-- 显示题目区域 -->
+<pre id="result" style="white-space: pre-wrap;"></pre> <!-- 显示结果区域，使用pre标签保留格式 -->
+
+<script>
+    $(document).ready(function(){
+        // 当点击获取题目按钮时
+        $('#getQuestions').click(function(){
+            $.getJSON('/get_questions', function(data){
+                let questionsDiv = $('#questions');
+                questionsDiv.empty(); // 清空题目区域
+                data.forEach(function(item, index){ // 循环显示每个题目
+                    questionsDiv.append(`<p>${item.question}<input type='text' id='answer${index}' /></p>`); // 显示题目和输入框
+                });
+                questionsDiv.append('<button onclick="submitAnswers()">Submit Answers</button>'); // 添加提交答案按钮
+            });
+        });
+
+        window.submitAnswers = function(){
+            let answers = [];
+            $('input[id^="answer"]').each(function(){ // 收集所有答案
+                let index = this.id.replace('answer','');
+                let question = $('p:nth-child('+(parseInt(index)+1)+')').text().trim().split('=')[0].trim();
+                answers.push({'question': question+'= ', 'answer': parseInt(this.value)});
+            });
+            $.ajax({ // 发送答案到服务器进行验证
+                url: '/check_answers',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(answers),
+                success: function(response){
+                    let resultPre = $('#result');
+                    resultPre.empty(); // 清空结果区域
+
+                    const displayResult = (index) => { // 递归函数逐个显示每个结果
+                        if(index < response.results.length) {
+                            let item = response.results[index];
+                            let msg;
+                            if(item.correct) {
+                                msg = `第${item.index}题正确\n\n`; // 正确答案格式
+                            } else {
+                                msg = `第${item.index}题错误，正确的答案是${item.expected}\n\n`; // 错误答案格式
+                            }
+                            resultPre.append(msg);
+                            setTimeout(() => displayResult(index + 1), 1000); // 每隔一秒显示下一个结果
+                        } else if(response.score == response.results.length) {
+                            resultPre.append("恭喜你，全答对！\n"); // 全部正确的情况
+                        }
+                    };
+
+                    displayResult(0); // 开始显示第一个结果
+                }
+            });
+        };
+    });
+</script>
+</body>
+</html>
